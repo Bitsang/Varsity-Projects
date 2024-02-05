@@ -1,0 +1,44 @@
+import org.apache.spark.sql.functions._
+
+
+val customersDF = spark.read.format("csv").load("dbfs:/FileStore/shared_uploads/bitsangleone@gmail.com/Customers-1.csv")
+val contactsDF  = spark.read.format("csv").load("dbfs:/FileStore/shared_uploads/bitsangleone@gmail.com/Contacts-1.csv")
+import org.apache.spark.sql.functions._
+
+
+val customersSplit = customersDF.withColumn("_tmp", split($"_c0", ";"))
+val contactsSplit = contactsDF.withColumn("_tmp", split($"_c0", ";"))
+
+
+val customersParsed = (0 until 5).foldLeft(customersSplit)((df, i) => df.withColumn(s"col$i", $"_tmp".getItem(i))).drop("_tmp")
+val contactsParsed = (0 until 4).foldLeft(contactsSplit)((df, i) => df.withColumn(s"col$i", $"_tmp".getItem(i))).drop("_tmp")
+
+
+val customersRenamed = customersParsed.withColumnRenamed("col0", "id").withColumnRenamed("col1", "firstname").withColumnRenamed("col2", "surname").withColumnRenamed("col3", "gender").withColumnRenamed("col4", "age").withColumnRenamed("col5", "delivery")
+val contactsRenamed = contactsParsed.withColumnRenamed("col0", "id").withColumnRenamed("col1", "cellphone").withColumnRenamed("col2", "residence").withColumnRenamed("col3", "delivery")
+
+
+val customer_contact = customersRenamed.join(contactsRenamed, Seq("id"))
+
+// Display DataFrames
+customersDF.printSchema()
+customersDF.show()
+contactsDF.printSchema()
+contactsDF.show()
+customer_contact.printSchema()
+customer_contact.show()
+
+
+import org.apache.spark.sql.functions._
+
+
+val maxAge = customer_contact.filter($"age".isNotNull).agg(max("age")).collect()(0)(0)
+val aveAge = customer_contact.filter($"age".isNotNull).agg(avg("age")).collect()(0)(0)
+
+
+val finalDF = customer_contact.withColumn("max_age", lit(maxAge)).withColumn("ave_age", lit(aveAge))
+
+
+finalDF.show()
+
+finalDF.write.parquet("dbfs:/FileStore/shared_uploads/bitsangleone@gmail.com/customer_contact.parquet")
